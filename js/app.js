@@ -3070,7 +3070,7 @@ function renderOverview() {
 
     holdingsDeltaHtml = `
       <div>
-        <div class="overview-section-title">My Holdings</div>
+        <div class="ov-subsection-label">Holdings Performance</div>
         <div class="hdelta-summary">
           <div class="hdelta-summary-item">
             <span class="hdelta-summary-label">Total P&amp;L</span>
@@ -3096,9 +3096,9 @@ function renderOverview() {
       </div>`;
   }
 
-  // ── Feature 9: Sector Rotation ────────────────────────────────────
+  // ── Feature 9: Sector Rotation — build inner content only ──────────
   const { rising, fading } = detectSectorRotation();
-  let rotationHtml = '';
+  let rotationInnerHtml = '';
   if (rising.length > 0 || fading.length > 0) {
     const risingPills = rising.map(s =>
       `<span class="rotation-pill rising">↑↑ ${s.name} <span class="rotation-count">+${s.fresh.toFixed(0)} signals</span></span>`
@@ -3107,23 +3107,20 @@ function renderOverview() {
       `<span class="rotation-pill fading">↓ ${s.name} <span class="rotation-count">${s.older.toFixed(0)} old signals</span></span>`
     ).join('');
     const rotLabel = rising.length > 0 && fading.length > 0
-      ? `Capital rotation signal detected`
-      : rising.length > 0 ? `Sector acceleration detected` : `Sector momentum fading`;
-    rotationHtml = `
-      <div>
-        <div class="overview-section-title">Sector Pulse</div>
-        <div class="sector-rotation-row">
-          <span class="rotation-label">${rotLabel}</span>
-          <div class="rotation-pills">${risingPills}${fadingPills}</div>
-        </div>
+      ? 'Capital rotation signal detected'
+      : rising.length > 0 ? 'Sector acceleration detected' : 'Sector momentum fading';
+    rotationInnerHtml = `
+      <div class="sector-rotation-row">
+        <span class="rotation-label">${rotLabel}</span>
+        <div class="rotation-pills">${risingPills}${fadingPills}</div>
       </div>`;
   }
 
-  // ── Feature 12: Risk Concentration Warning ─────────────────────────
+  // ── Feature 12: Risk Concentration — build inner content only ───────
   const conc = calcConcentration();
-  let concHtml = '';
+  let concInnerHtml = '';
   if (conc && conc.overweight.length > 0) {
-    const concPills = conc.overweight.map(s => {
+    concInnerHtml = conc.overweight.map(s => {
       const instruments = loadHoldings()
         .map(h => [...WATCHLIST, ...INDICATORS].find(i => i.id === h.id))
         .filter(i => i && (i.sector || i.type) === s.sector)
@@ -3137,11 +3134,6 @@ function renderOverview() {
         </div>
       </div>`;
     }).join('');
-    concHtml = `
-      <div>
-        <div class="overview-section-title">Risk Concentration</div>
-        ${concPills}
-      </div>`;
   }
 
   // ── Persist section open/closed state across re-renders ────────────
@@ -3149,7 +3141,7 @@ function renderOverview() {
     window._ovOpen = { picks: true, intelligence: false, portfolio: true, events: false };
   }
 
-  // ── Helper: build a collapsible overview section ─────────────────
+  // ── Helper: collapsible overview section ─────────────────────────
   function makeOvSection(key, icon, title, subtitle, body) {
     const open = !!window._ovOpen[key];
     return `
@@ -3168,7 +3160,7 @@ function renderOverview() {
       </div>`;
   }
 
-  // ── Section 1: Pre-Market Picks (starts open) ─────────────────────
+  // ── Section 1: Pre-Market Picks — starts OPEN ─────────────────────
   const picksInner = renderDayPredictions(predData);
   const picksBody = `
     <div class="dp-picks-inner">
@@ -3176,7 +3168,7 @@ function renderOverview() {
       ${picksInner}
     </div>`;
 
-  // ── Section 2: Market Intelligence (starts closed) ────────────────
+  // ── Section 2: Market Intelligence — starts CLOSED ────────────────
   const intelligenceBody = `
     <div class="ov-subsection">
       <div class="ov-subsection-title">
@@ -3189,37 +3181,44 @@ function renderOverview() {
       <div class="ov-subsection-label">Signal Summary</div>
       ${sigSummaryHtml}
     </div>
-    ${rotationHtml ? `
+    ${rotationInnerHtml ? `
     <div class="ov-subsection">
       <div class="ov-subsection-label">Sector Pulse</div>
-      <div class="sector-rotation-row">
-        <span class="rotation-label">${(() => {
-          const { rising, fading } = detectSectorRotation();
-          return rising.length > 0 && fading.length > 0 ? 'Capital rotation signal detected'
-               : rising.length > 0 ? 'Sector acceleration detected' : 'Sector momentum fading';
-        })()}</span>
-        <div class="rotation-pills">${rotationHtml.match(/<div class="rotation-pills">([\s\S]*?)<\/div>/)?.[1] || ''}</div>
-      </div>
+      ${rotationInnerHtml}
     </div>` : ''}
     <div class="ov-subsection">
       <div class="ov-subsection-label">Today's Movers &amp; Dippers</div>
       ${moversHtml}
     </div>`;
 
-  // ── Section 3: My Portfolio (starts open) ─────────────────────────
-  const portfolioBody = holdingsDeltaHtml || concHtml
-    ? `${holdingsDeltaHtml}${concHtml}`
-    : `<div class="ov-empty">No holdings recorded yet. Add positions in the Holdings tab.</div>`;
+  // ── Section 3: My Portfolio — starts OPEN ────────────────────────
+  const holdingsBlock    = holdingsDeltaHtml ? `<div class="ov-subsection">${holdingsDeltaHtml}</div>` : '';
+  const concBlock        = concInnerHtml ? `
+    <div class="ov-subsection">
+      <div class="ov-subsection-label">Risk Concentration</div>
+      ${concInnerHtml}
+    </div>` : '';
+  const portfolioBody    = holdingsBlock || concBlock
+    ? `${holdingsBlock}${concBlock}`
+    : `<div class="ov-empty">No holdings recorded yet — add positions in the Holdings tab.</div>`;
 
-  // ── Section 4: Upcoming Events (starts closed) ────────────────────
-  const eventsBody = `${renderEarningsCalendar()}${renderMacroCalendar()}`;
+  // ── Section 4: Upcoming Events — starts CLOSED ────────────────────
+  const eventsBody = `
+    <div class="ov-subsection">
+      <div class="ov-subsection-label">Earnings Next 30 Days</div>
+      ${renderEarningsCalendar(true)}
+    </div>
+    <div class="ov-subsection">
+      <div class="ov-subsection-label">Macro Events Next 30 Days</div>
+      ${renderMacroCalendar(true)}
+    </div>`;
 
   panel.innerHTML = `
     <div class="ov-sections">
-      ${makeOvSection('picks',        '◉', 'Pre-Market Picks',      'Signal-based outlook · not financial advice', picksBody)}
-      ${makeOvSection('intelligence', '◈', 'Market Intelligence',   'Heatmap · Signals · Rotation · Movers',       intelligenceBody)}
-      ${makeOvSection('portfolio',    '▣', 'My Portfolio',          'Holdings P&L · Risk Concentration',           portfolioBody)}
-      ${makeOvSection('events',       '⏱', 'Upcoming Events',       'Earnings &amp; Macro · Next 30 Days',         eventsBody)}
+      ${makeOvSection('picks',        '◉', 'Pre-Market Picks',    'Signal-based outlook · not financial advice', picksBody)}
+      ${makeOvSection('intelligence', '◈', 'Market Intelligence', 'Heatmap · Signals · Rotation · Movers',       intelligenceBody)}
+      ${makeOvSection('portfolio',    '▣', 'My Portfolio',        'Holdings P&amp;L · Risk Concentration',       portfolioBody)}
+      ${makeOvSection('events',       '⏱', 'Upcoming Events',     'Earnings &amp; Macro · Next 30 Days',         eventsBody)}
     </div>
   `;
 }
@@ -3673,10 +3672,7 @@ function renderEarningsCalendar() {
     </div>`;
   }).join('');
 
-  return `<div>
-    <div class="overview-section-title">Earnings Next 30 Days</div>
-    <div class="earn-list">${rows}</div>
-  </div>`;
+  return `<div class="earn-list">${rows}</div>`;
 }
 
 function renderMacroCalendar() {
@@ -3706,10 +3702,7 @@ function renderMacroCalendar() {
     </div>`;
   }).join('');
 
-  return `<div>
-    <div class="overview-section-title">Macro Events Next 30 Days</div>
-    <div class="macro-list">${rows}</div>
-  </div>`;
+  return `<div class="macro-list">${rows}</div>`;
 }
 
 // ─── Market Pulse ─────────────────────────────────────────────────────

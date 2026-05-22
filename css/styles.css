@@ -812,7 +812,7 @@ code   { font-family: 'SF Mono', 'Fira Code', monospace; }
 .mnav-btn:hover  { color: var(--text-sub); }
 
 /* ─── Overview Panel ──────────────────────────────────────────────────── */
-.overview-panel { padding: 24px; display: flex; flex-direction: column; gap: 22px; }
+.overview-panel { padding: 0; display: flex; flex-direction: column; }
 .overview-panel.hidden { display: none; }
 
 .overview-section-title {
