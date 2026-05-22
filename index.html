@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Stock Advisor — IT & Space</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- ─── Setup Modal ─────────────────────────────────────────────── -->
+  <div id="setup-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-logo">◈</div>
+      <h2>Stock Advisor</h2>
+      <p>
+        Enter your free API keys for live prices &amp; news — or use Demo Mode.
+        <br><small style="color:var(--text-muted)">Both keys are free, no credit card needed.</small>
+      </p>
+      <div style="text-align:left;font-size:0.72rem;color:var(--text-sub);margin-bottom:2px;font-weight:600;">
+        Finnhub — US stocks &amp; news
+        <a href="https://finnhub.io" target="_blank" rel="noopener" style="font-weight:400;margin-left:6px;">Get free key ↗</a>
+      </div>
+      <input
+        type="text"
+        id="api-key-input"
+        placeholder="Finnhub API key (live trades, WebSocket)"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <div style="text-align:left;font-size:0.72rem;color:var(--text-sub);margin-bottom:2px;font-weight:600;">
+        Twelve Data — indices &amp; ETFs <span style="color:var(--text-muted);font-weight:400">(optional but recommended)</span>
+        <a href="https://twelvedata.com/" target="_blank" rel="noopener" style="font-weight:400;margin-left:6px;">Get free key ↗</a>
+      </div>
+      <input
+        type="text"
+        id="twelvedata-key-input"
+        placeholder="Twelve Data key (800 calls/day free, no CORS proxy)"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button id="save-key-btn" class="btn-primary">Connect Live Data</button>
+      <button id="demo-mode-btn" class="btn-ghost">Use Demo Mode (no key needed)</button>
+    </div>
+  </div>
+
+  <!-- ─── Load Progress Bar ──────────────────────────────────────── -->
+  <div id="load-bar-wrap" class="load-bar-wrap hidden">
+    <div id="load-bar" class="load-bar"></div>
+    <div id="load-bar-label" class="load-bar-label">Loading…</div>
+  </div>
+
+  <!-- ─── Global Alert Banner ─────────────────────────────────────── -->
+  <div id="alert-banner" class="alert-banner hidden">
+    <span id="alert-banner-text"></span>
+    <button id="alert-banner-close" title="Dismiss">✕</button>
+  </div>
+
+  <!-- ─── Header ──────────────────────────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="app-logo">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">StockAdvisor</span>
+      </div>
+      <div class="market-status" id="market-status">
+        <span class="status-dot"></span>
+        <span>Loading...</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="market-clocks" id="market-clocks"></div>
+      <span class="last-updated" id="last-updated"></span>
+    </div>
+    <div class="header-right">
+      <span class="ws-status" id="ws-status"></span>
+      <button class="refresh-btn" id="refresh-btn" onclick="manualRefresh()" title="Refresh prices now">⟳</button>
+      <button class="notification-bell" id="notif-bell" onclick="toggleNotifPanel()">
+        🔔
+        <span class="notif-badge hidden" id="notif-count">0</span>
+      </button>
+      <button class="settings-btn" onclick="showSettings()" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- ─── Notification Panel ──────────────────────────────────────── -->
+  <div id="notif-panel" class="notif-panel hidden">
+    <div class="notif-panel-header">
+      <h3>Signal Alerts</h3>
+      <button onclick="clearAllAlerts()">Clear all</button>
+    </div>
+    <div id="notif-list" class="notif-list">
+      <p class="empty-notif">No alerts yet — signals will appear here when material news hits your instruments.</p>
+    </div>
+  </div>
+
+  <!-- ─── Main Layout ─────────────────────────────────────────────── -->
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="sidebar-tabs">
+        <button class="stab active" data-tab="watchlist" onclick="switchTab('watchlist')">
+          Watchlist <span class="tab-count" id="watchlist-count">22</span>
+        </button>
+        <button class="stab" data-tab="indicators" onclick="switchTab('indicators')">
+          Indicators <span class="tab-count">11</span>
+        </button>
+        <button class="stab" data-tab="holdings" onclick="switchTab('holdings')">
+          Holdings
+        </button>
+        <button class="stab" data-tab="news" onclick="switchTab('news')">
+          News
+        </button>
+        <button class="stab" data-tab="recommendations" onclick="switchTab('recommendations')">
+          🎯 Dips
+        </button>
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
+      </div>
+
+      <div class="sidebar-search">
+        <input
+          type="text"
+          id="search-input"
+          placeholder="Search instruments..."
+          oninput="filterList(this.value)"
+          autocomplete="off"
+        >
+      </div>
+
+      <div class="filter-bar">
+        <button class="filter-btn active" data-sort="default" onclick="sortList('default')">Default</button>
+        <button class="filter-btn" data-sort="bullish" onclick="sortList('bullish')">▲ Bullish</button>
+        <button class="filter-btn" data-sort="bearish" onclick="sortList('bearish')">▼ Bearish</button>
+        <button class="filter-btn" data-sort="alerts" onclick="sortList('alerts')">🔴 Most News</button>
+      </div>
+
+      <div id="watchlist-list" class="instrument-list"></div>
+      <div id="indicators-list" class="instrument-list hidden"></div>
+      <div id="recommendations-list" class="instrument-list hidden"></div>
+      <div id="holdings-list" class="instrument-list hidden"></div>
+      <div id="newsfeed-list" class="instrument-list hidden"></div>
+
+    </aside>
+
+    <!-- Detail Panel -->
+    <main class="detail-panel" id="detail-panel">
+
+      <div id="overview-panel" class="overview-panel hidden"></div>
+
+      <div class="empty-state hidden" id="empty-state">
+        <div class="empty-icon">◈</div>
+        <h3>Select an instrument</h3>
+        <p>Click any stock or indicator on the left to see the full analysis — live prices, news breakdown, and signal reasoning.</p>
+      </div>
+
+      <div id="instrument-detail" class="instrument-detail hidden"></div>
+
+    </main>
+
+  </div>
+
+  <!-- ─── Mobile Bottom Nav ────────────────────────────────────────── -->
+  <nav class="mobile-nav">
+    <button class="mnav-btn active" onclick="showView('list')">
+      <span>≡</span>
+      <label>Watchlist</label>
+    </button>
+    <button class="mnav-btn" onclick="showView('detail')">
+      <span>◈</span>
+      <label>Analysis</label>
+    </button>
+    <button class="mnav-btn" onclick="showView('alerts')">
+      <span>🔔</span>
+      <label>Alerts</label>
+    </button>
+  </nav>
+
+  <!-- ─── Scripts ─────────────────────────────────────────────────── -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sentiment.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
